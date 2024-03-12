@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"sync"
@@ -15,16 +16,33 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+type messageData struct {
+	Port   string
+	Number int
+}
+
 // connection wraps the websocket connection and the send channel.
 type connection struct {
 	ws   *websocket.Conn
-	send chan int
+	send chan messageData
 }
 
 // runWriter listens on the send channel and sends messages to the client.
 func (c *connection) runWriter() {
-	for message := range c.send {
-		if err := c.ws.WriteJSON(map[string]interface{}{"number": message}); err != nil {
+	// for message := range c.send {
+	// 	if err := c.ws.WriteJSON(map[string]interface{}{"number": message}); err != nil {
+	// 		break
+	// 	}
+	// }
+	for msg := range c.send {
+		// Convert the messageData struct to JSON for sending
+		jsonMsg, err := json.Marshal(msg)
+		if err != nil {
+			log.Printf("Failed to marshal message: %v", err)
+			continue
+		}
+		if err := c.ws.WriteMessage(websocket.TextMessage, jsonMsg); err != nil {
+			log.Printf("Failed to send message: %v", err)
 			break
 		}
 	}
@@ -40,7 +58,7 @@ func serveWs(port string, pool *sync.Pool, addConn chan *connection, removeConn 
 
 		conn := pool.Get().(*connection)
 		conn.ws = ws
-		conn.send = make(chan int, 256)
+		conn.send = make(chan messageData, 256)
 
 		addConn <- conn
 
@@ -59,7 +77,9 @@ func serveWs(port string, pool *sync.Pool, addConn chan *connection, removeConn 
 
 func main() {
 	ports := []string{"5555", "5556", "5557"}
+	inc := 0
 	for _, port := range ports {
+		inc++
 		addConn := make(chan *connection)
 		removeConn := make(chan *connection)
 		conns := make(map[*connection]bool)
@@ -86,20 +106,24 @@ func main() {
 			}
 		}()
 
-		go func(port string) {
+		go func(port string, inc int) {
 			for {
 				time.Sleep(2 * time.Second)
-				counter++
+				counter += inc
+				msg := messageData{
+					Port:   port,
+					Number: counter,
+				}
 				for conn := range conns {
 					select {
-					case conn.send <- counter:
+					case conn.send <- msg:
 					default:
 						close(conn.send)
 						delete(conns, conn)
 					}
 				}
 			}
-		}(port)
+		}(port, inc)
 
 		mux := http.NewServeMux()
 		mux.HandleFunc("/", serveWs(port, pool, addConn, removeConn))
