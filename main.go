@@ -2,8 +2,8 @@ package main
 
 import (
 	"log"
-	"math/rand"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -15,57 +15,102 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-func handleConnections(port string) http.HandlerFunc {
-	var counter int
+// connection wraps the websocket connection and the send channel.
+type connection struct {
+	ws   *websocket.Conn
+	send chan int
+}
+
+// runWriter listens on the send channel and sends messages to the client.
+func (c *connection) runWriter() {
+	for message := range c.send {
+		if err := c.ws.WriteJSON(map[string]interface{}{"number": message}); err != nil {
+			break
+		}
+	}
+	c.ws.Close()
+}
+
+func serveWs(port string, pool *sync.Pool, addConn chan *connection, removeConn chan *connection) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Upgrade initial GET request to a websocket
 		ws, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			log.Fatal(err)
 		}
-		defer ws.Close()
 
-		for {
-			// Generate a random number
-			counter++
+		conn := pool.Get().(*connection)
+		conn.ws = ws
+		conn.send = make(chan int, 256)
 
-			// Construct the response including the port number
-			response := map[string]interface{}{
-				"port":   port,
-				"number": counter,
-			}
+		addConn <- conn
 
-			// Send the response to the client
-			if err := ws.WriteJSON(response); err != nil {
-				log.Printf("error: %v", err)
-				break
-			}
+		// Start writer goroutine
+		go conn.runWriter()
 
-			// Wait for 2 seconds before sending the next number
-			time.Sleep(2 * time.Second)
+		// Wait for connection to close
+		_, _, err = ws.ReadMessage()
+		if err != nil {
+			removeConn <- conn
+			pool.Put(conn)
+			ws.Close()
 		}
 	}
 }
 
 func main() {
-	// Seed the random number generator
-	rand.Seed(time.Now().UnixNano())
-
-	// Define ports to run servers on
 	ports := []string{"5555", "5556", "5557"}
 	for _, port := range ports {
-		mux := http.NewServeMux() // Create a new ServeMux for each port
-		mux.HandleFunc("/", handleConnections(port))
+		addConn := make(chan *connection)
+		removeConn := make(chan *connection)
+		conns := make(map[*connection]bool)
+		counter := 0
+
+		// Connection pool to reuse connection objects
+		pool := &sync.Pool{
+			New: func() interface{} {
+				return &connection{}
+			},
+		}
+
+		go func() {
+			for {
+				select {
+				case conn := <-addConn:
+					conns[conn] = true
+				case conn := <-removeConn:
+					if _, ok := conns[conn]; ok {
+						delete(conns, conn)
+						close(conn.send)
+					}
+				}
+			}
+		}()
+
+		go func(port string) {
+			for {
+				time.Sleep(2 * time.Second)
+				counter++
+				for conn := range conns {
+					select {
+					case conn.send <- counter:
+					default:
+						close(conn.send)
+						delete(conns, conn)
+					}
+				}
+			}
+		}(port)
+
+		mux := http.NewServeMux()
+		mux.HandleFunc("/", serveWs(port, pool, addConn, removeConn))
 
 		go func(port string) {
 			log.Printf("Starting server on port %s...\n", port)
-			err := http.ListenAndServe(":"+port, mux) // Use the ServeMux for this server
-			if err != nil {
+			if err := http.ListenAndServe(":"+port, mux); err != nil {
 				log.Fatal("ListenAndServe: ", err)
 			}
 		}(port)
 	}
 
-	// Keep the main goroutine running indefinitely
 	select {}
 }
