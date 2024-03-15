@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"text/template"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -49,6 +51,25 @@ func main() {
 			"Email": "skyscraper@gmail.com",
 		}
 		return e.Render(http.StatusOK, "index", res)
+	})
+	e.GET("/sub", func(c echo.Context) error {
+		c.Response().Header().Set(echo.HeaderContentType, "text/event-stream")
+		c.Response().WriteHeader(http.StatusOK)
+		i := 1
+		for {
+			i++
+			fmt.Println(i)
+			select {
+			case <-c.Request().Context().Done():
+				return nil
+			default:
+			}
+			fmt.Fprintf(c.Response(), "data: hi %d\n\n", i)
+			// fmt.Fprint(c.Response(), "data: hi\n\n")
+			c.Response().Flush()
+			time.Sleep(1 * time.Second)
+		}
+		return nil
 	})
 
 	e.Logger.Fatal(e.Start(":4040"))
