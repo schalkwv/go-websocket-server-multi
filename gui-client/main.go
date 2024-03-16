@@ -1,12 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"text/template"
-	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"golang.org/x/time/rate"
@@ -34,6 +36,12 @@ func newTemplate(templates *template.Template) echo.Renderer {
 		Templates: templates,
 	}
 }
+
+type messageData struct {
+	Port   string
+	Number int
+}
+
 func main() {
 	e := echo.New()
 	e.Pre(middleware.RemoveTrailingSlash())
@@ -52,22 +60,46 @@ func main() {
 		}
 		return e.Render(http.StatusOK, "index", res)
 	})
-	e.GET("/sub", func(c echo.Context) error {
+	e.GET("/sub/:port", func(c echo.Context) error {
 		c.Response().Header().Set(echo.HeaderContentType, "text/event-stream")
 		c.Response().WriteHeader(http.StatusOK)
-		i := 1
+
+		port := c.Param("port")
+		addr := fmt.Sprintf("localhost:%s", port)
+		url := fmt.Sprintf("ws://%s/", addr)
+
+		// Connect to the WebSocket server
+		mainConn, _, err := websocket.DefaultDialer.Dial(url, nil)
+		if err != nil {
+			log.Fatal("dial:", err)
+		}
+		defer mainConn.Close()
+
+		fmt.Printf("Connected to %s\n", url)
 		for {
-			i++
-			fmt.Println(i)
+			// Read message from the server
+			_, message, err := mainConn.ReadMessage()
+			if err != nil {
+				log.Println("read:", err)
+				break
+			}
+			// marshal message
+			var msgData messageData
+			err = json.Unmarshal(message, &msgData)
+			if err != nil {
+				log.Printf("Failed to unmarshal message: %v", err)
+				continue
+			}
 			select {
 			case <-c.Request().Context().Done():
 				return nil
 			default:
 			}
-			fmt.Fprintf(c.Response(), "data: hi %d\n\n", i)
-			// fmt.Fprint(c.Response(), "data: hi\n\n")
+			fmt.Fprintf(c.Response(), "data: hi %d\n\n", msgData.Number)
 			c.Response().Flush()
-			time.Sleep(1 * time.Second)
+
+			// Log the message to the terminal
+			// fmt.Printf("Message: %s\n", message)
 		}
 		return nil
 	})
