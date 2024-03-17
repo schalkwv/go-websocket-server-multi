@@ -75,10 +75,20 @@ func serveWs(port string, pool *sync.Pool, addConn chan *connection, removeConn 
 	}
 }
 
+type serverType struct {
+	port  string
+	delay time.Duration
+}
+
 func main() {
-	ports := []string{"5555", "5556", "5557"}
+	servers := []serverType{
+		{"5555", 1000},
+		{"5556", 1500},
+		{"5557", 2300},
+	}
+	// ports := []string{"5555", "5556", "5557"}
 	inc := 0
-	for _, port := range ports {
+	for _, server := range servers {
 		inc++
 		addConn := make(chan *connection)
 		removeConn := make(chan *connection)
@@ -106,9 +116,9 @@ func main() {
 			}
 		}()
 
-		go func(port string, inc int) {
+		go func(port string, inc int, delay time.Duration) {
 			for {
-				time.Sleep(2 * time.Second)
+				time.Sleep(delay * time.Millisecond)
 				counter += inc
 				msg := messageData{
 					Port:   port,
@@ -123,17 +133,17 @@ func main() {
 					}
 				}
 			}
-		}(port, inc)
+		}(server.port, inc, server.delay)
 
 		mux := http.NewServeMux()
-		mux.HandleFunc("/", serveWs(port, pool, addConn, removeConn))
+		mux.HandleFunc("/", serveWs(server.port, pool, addConn, removeConn))
 
 		go func(port string) {
 			log.Printf("Starting server on port %s...\n", port)
 			if err := http.ListenAndServe(":"+port, mux); err != nil {
 				log.Fatal("ListenAndServe: ", err)
 			}
-		}(port)
+		}(server.port)
 	}
 
 	select {}
