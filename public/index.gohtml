@@ -12,11 +12,14 @@
 <p>Hello, World!</p>
 {{template "name_card" .}}
 <h1>SSE Example with HTMX</h1>
-<div hx-ext="sse" sse-connect="/sub/5555" sse-swap="message">
-    Contents of this box will be updated in real time with every SSE message received from the chatroom.
-</div>
+{{/*<div hx-ext="sse" sse-connect="/sub/5555" sse-swap="message">*/}}
+{{/*    Contents of this box will be updated in real time with every SSE message received from the chatroom.*/}}
+{{/*</div>*/}}
 
 <div hx-ext="sse" sse-connect="/sub/5556" sse-swap="message">
+    Contents of this box will be updated in real time with every SSE message received from the chatroom.
+</div>
+<div hx-ext="sse" sse-connect="/sub/5557" sse-swap="message">
     Contents of this box will be updated in real time with every SSE message received from the chatroom.
 </div>
 

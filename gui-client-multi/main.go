@@ -42,6 +42,67 @@ type messageData struct {
 	Number int
 }
 
+const (
+	// WebSocket endpoint URL
+	mainEndPoint = "ws://localhost:5555/"
+)
+
+func mainConnection(c chan messageData) {
+	// Connect to the WebSocket server
+	mainConn, _, err := websocket.DefaultDialer.Dial(mainEndPoint, nil)
+	if err != nil {
+		log.Fatal("dial:", err)
+	}
+	defer mainConn.Close()
+
+	fmt.Printf("Websocket connected to %s\n", mainEndPoint)
+	for {
+		// Read message from the server
+		_, message, err := mainConn.ReadMessage()
+		if err != nil {
+			log.Println("read:", err)
+			break
+		}
+		// marshal message
+		var msgData messageData
+		err = json.Unmarshal(message, &msgData)
+		if err != nil {
+			log.Printf("Failed to unmarshal message: %v", err)
+			continue
+		}
+		c <- msgData
+	}
+}
+
+func subConnection(c chan messageData, port string) {
+	// Connect to the WebSocket server
+	addr := fmt.Sprintf("localhost:%s", port)
+	url := fmt.Sprintf("ws://%s/", addr)
+	mainConn, _, err := websocket.DefaultDialer.Dial(url, nil)
+	if err != nil {
+		log.Fatal("dial:", err)
+	}
+	defer mainConn.Close()
+
+	fmt.Printf("Websocket connected to %s\n", url)
+	for {
+		// Read message from the server
+		_, message, err := mainConn.ReadMessage()
+		if err != nil {
+			log.Println("read:", err)
+			break
+		}
+		// marshal message
+		var msgData messageData
+		err = json.Unmarshal(message, &msgData)
+		if err != nil {
+			log.Printf("Failed to unmarshal message: %v", err)
+			continue
+		}
+		c <- msgData
+	}
+}
+
 func main() {
 	e := echo.New()
 	e.Pre(middleware.RemoveTrailingSlash())
@@ -49,6 +110,12 @@ func main() {
 	e.Use(middleware.RateLimiter(middleware.NewRateLimiterMemoryStore(
 		rate.Limit(20),
 	)))
+
+	// channel for sending messages to the client
+	broadcast := make(chan messageData)
+
+	// connect to main websocket server and start listening for messages
+	go mainConnection(broadcast)
 
 	NewTemplateRenderer(e, "public/*.gohtml")
 
@@ -65,43 +132,23 @@ func main() {
 		c.Response().WriteHeader(http.StatusOK)
 
 		port := c.Param("port")
-		addr := fmt.Sprintf("localhost:%s", port)
-		url := fmt.Sprintf("ws://%s/", addr)
 
-		// Connect to the WebSocket server
-		mainConn, _, err := websocket.DefaultDialer.Dial(url, nil)
-		if err != nil {
-			log.Fatal("dial:", err)
-		}
-		defer mainConn.Close()
-
-		fmt.Printf("Websocket connected to %s\n", url)
+		subChannel := make(chan messageData)
+		// connect to sub websocket server and
+		// start listening for messages
+		go subConnection(subChannel, port)
+		// listen for messages from the sub websocket server and the main websocket server
 		for {
-			// Read message from the server
-			_, message, err := mainConn.ReadMessage()
-			if err != nil {
-				log.Println("read:", err)
-				break
-			}
-			// marshal message
-			var msgData messageData
-			err = json.Unmarshal(message, &msgData)
-			if err != nil {
-				log.Printf("Failed to unmarshal message: %v", err)
-				continue
-			}
 			select {
-			case <-c.Request().Context().Done():
-				return nil
-			default:
+			case msg := <-subChannel:
+				fmt.Fprintf(c.Response(), "data: %s %d\n\n", msg.Port, msg.Number)
+				c.Response().Flush()
+			case msg := <-broadcast:
+				fmt.Fprintf(c.Response(), "data: %s %d\n\n", msg.Port, msg.Number)
+				c.Response().Flush()
 			}
-			fmt.Fprintf(c.Response(), "data: main %d\n\n", msgData.Number)
-			c.Response().Flush()
-
-			// Log the message to the terminal
-			// fmt.Printf("Message: %s\n", message)
 		}
-		return nil
+
 	})
 
 	e.Logger.Fatal(e.Start(":4040"))
