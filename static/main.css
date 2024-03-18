@@ -1,0 +1,36 @@
+.gap {
+    gap: 6px;
+}
+
+.details.summary {
+    padding: 4px;
+    width: 200px;
+    background-color: #eeeeee;
+    border: none;
+    box-shadow: 1px 1px 2px #bbbbbb;
+    cursor: pointer;
+}
+
+.error {
+    color: red;
+}
+
+.fade-me-out.htmx-swapping {
+    opacity: 0;
+    transition: opacity 200ms ease-out;
+}
+
+.fade-me-in.htmx-added {
+    opacity: 0;
+}
+
+.fade-me-in {
+    opacity: 1;
+    transition: opacity 200ms ease-out;
+}
+
+.fade-me-out.htmx-swapping {
+    opacity: 0;
+    transition: opacity 200ms ease-out;
+}
+

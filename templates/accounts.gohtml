@@ -1,0 +1,38 @@
+{{ define "Accounts"}}
+    <h2>Accounts</h2>
+    <div id="account-list">
+        {{ range $accId, $account := .Accounts }}
+            {{ template "AccountListItem" dict "Account" $account "AccountID" $accId }}
+        {{ end }}
+    </div>
+{{end}}
+
+{{ define "AccountListItem"}}
+    {{ if .SwapOOB }}
+        <div hx-swap-oob="afterbegin:#Account-list">
+            {{ template "AccountListInnerItem" . }}
+        </div>
+    {{ else }}
+        {{ template "AccountListInnerItem" . }}
+    {{ end }}
+{{ end }}
+
+{{ define "AccountListInnerItem"}}
+    <div id="Account-{{ .AccountID}}" class="p-1 m-1 d-flex gap border">
+        <div>
+            {{ template "AccountForm" . }}
+        </div>
+    </div>
+{{ end }}
+
+{{ define "AccountForm" }}
+    <div hx-target="this"
+         hx-swap="outerHTML swap:200ms"
+         class="gap p-1 d-flex justify-content-between fade-me-in fade-me-out"
+    >
+        <h3>{{ .Account.Name }}</h3>
+        <div>
+            {{ .Account.Port }}
+        </div>
+    </div>
+{{ end }}
