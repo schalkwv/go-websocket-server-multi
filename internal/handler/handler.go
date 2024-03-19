@@ -10,6 +10,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"golang.org/x/time/rate"
 )
 
 type Server struct {
@@ -105,8 +106,14 @@ func subConnection(c chan messageData, port string) {
 
 func (s *Server) Router() *echo.Echo {
 	e := echo.New()
-	e.Use(middleware.CORS())
-	e.Validator = &Validator{validator: validator.New()}
+	e.Pre(middleware.RemoveTrailingSlash())
+	e.Use(middleware.Recover())
+	e.Use(middleware.RateLimiter(middleware.NewRateLimiterMemoryStore(
+		rate.Limit(20),
+	)))
+
+	// e.Use(middleware.CORS())
+	// e.Validator = &Validator{validator: validator.New()}
 	e.Static("/static", "static")
 
 	e.GET("/version", s.versionHandler)
@@ -118,7 +125,7 @@ func (s *Server) Router() *echo.Echo {
 	// // connect to main websocket server and start listening for messages
 	// go mainConnection(broadcast)
 
-	// e.GET("/sub/:port", s.subHandler)
+	e.GET("/sub/:port", s.subHandler)
 
 	return e
 }
@@ -136,6 +143,7 @@ type accountList map[string]account
 
 func (s *Server) subHandler(c echo.Context) error {
 	c.Response().Header().Set(echo.HeaderContentType, "text/event-stream")
+	c.Response().Header().Set("Connection", "keep-alive")
 	c.Response().WriteHeader(http.StatusOK)
 
 	// port := c.Param("port")
