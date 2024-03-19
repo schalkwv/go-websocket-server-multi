@@ -44,7 +44,7 @@ type messageData struct {
 
 const (
 	// WebSocket endpoint URL
-	mainEndPoint = "ws://localhost:5555/"
+	mainEndPoint = "ws://localhost:5000/"
 )
 
 func mainConnection(c chan messageData) {

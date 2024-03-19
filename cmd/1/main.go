@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/kelseyhightower/envconfig"
 
@@ -33,6 +34,34 @@ func run() error {
 
 	server := handler.NewServer("1.0.0")
 	router := server.Router()
+
+	http.HandleFunc("/events", func(w http.ResponseWriter, r *http.Request) {
+		// Set headers for SSE
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+
+		// Create a channel to send data
+		dataCh := make(chan string)
+
+		// Create a context for handling client disconnection
+		_, cancel := context.WithCancel(r.Context())
+		defer cancel()
+
+		// Send data to the client
+		go func() {
+			for data := range dataCh {
+				fmt.Fprintf(w, "data: %s\n\n", data)
+				w.(http.Flusher).Flush()
+			}
+		}()
+
+		// Simulate sending data periodically
+		for {
+			dataCh <- time.Now().Format(time.TimeOnly)
+			time.Sleep(1 * time.Second)
+		}
+	})
 
 	done := make(chan struct{}) // closed when the server shutdown is complete
 	go func() {
