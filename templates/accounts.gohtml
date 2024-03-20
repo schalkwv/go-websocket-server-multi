@@ -26,17 +26,16 @@
 {{ end }}
 
 {{ define "AccountForm" }}
-    <div hx-target="this"
-         hx-swap="outerHTML swap:200ms"
+    <div
          class="gap p-1 d-flex justify-content-between fade-me-in fade-me-out"
     >
         <h3>{{ .Account.Name }}</h3>
         <div>
             {{ .Account.Port }}
         </div>
-{{/*        <div hx-ext="sse" sse-connect="/sub/{{ .Account.Port }}" sse-swap="message">*/}}
-{{/*            1111*/}}
-{{/*        </div>*/}}
+        <div hx-ext="sse" sse-connect="/sub/{{ .Account.Port }}" sse-swap="message">
+            1111
+        </div>
         <div hx-ext="sse" sse-connect="/events" sse-swap="message">
             aaaaaa.
         </div>

@@ -146,7 +146,7 @@ func (s *Server) subHandler(c echo.Context) error {
 	c.Response().Header().Set("Connection", "keep-alive")
 	c.Response().WriteHeader(http.StatusOK)
 
-	// port := c.Param("port")
+	port := c.Param("port")
 	//
 	// subChannel := make(chan messageData)
 	// // connect to sub websocket server and
@@ -159,7 +159,7 @@ func (s *Server) subHandler(c echo.Context) error {
 		// 	fmt.Fprintf(c.Response(), "data: %s %d\n\n", msg.Port, msg.Number)
 		// 	c.Response().Flush()
 		case msg := <-s.mainChannel:
-			fmt.Println("msg", msg)
+			fmt.Println("msg", msg, "port", port)
 			fmt.Fprintf(c.Response(), "data: %s %d\n\n", msg.Port, msg.Number)
 			c.Response().Flush()
 		}

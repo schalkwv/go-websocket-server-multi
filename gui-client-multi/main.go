@@ -70,6 +70,7 @@ func mainConnection(c chan messageData) {
 			log.Printf("Failed to unmarshal message: %v", err)
 			continue
 		}
+		fmt.Println("msgData", msgData)
 		c <- msgData
 	}
 }
@@ -140,9 +141,9 @@ func main() {
 		// listen for messages from the sub websocket server and the main websocket server
 		for {
 			select {
-			case msg := <-subChannel:
-				fmt.Fprintf(c.Response(), "data: %s %d\n\n", msg.Port, msg.Number)
-				c.Response().Flush()
+			// case msg := <-subChannel:
+			// 	fmt.Fprintf(c.Response(), "data: %s %d\n\n", msg.Port, msg.Number)
+			// 	c.Response().Flush()
 			case msg := <-broadcast:
 				fmt.Fprintf(c.Response(), "data: %s %d\n\n", msg.Port, msg.Number)
 				c.Response().Flush()

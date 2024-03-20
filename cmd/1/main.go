@@ -59,7 +59,7 @@ func run() error {
 		// Simulate sending data periodically
 		for {
 			dataCh <- time.Now().Format(time.TimeOnly)
-			time.Sleep(1 * time.Second)
+			time.Sleep(800 * time.Millisecond)
 		}
 
 	})
