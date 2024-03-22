@@ -14,8 +14,10 @@ import (
 )
 
 type Server struct {
-	appVersion  string
-	mainChannel chan messageData
+	appVersion         string
+	mainChannel        chan messageData
+	newReceiverChannel chan (chan messageData)
+	allTheReceivers    chan []chan messageData
 }
 
 // Validator is a custom validator for Echo.
@@ -30,11 +32,34 @@ func (v *Validator) Validate(i interface{}) error {
 }
 
 func NewServer(appVersion string) *Server {
+	// channel that passes around the list of receivers
+	allTheReceivers := make(chan []chan messageData)
+	// channel for adding a new receiver
+	newReceiverChannel := make(chan (chan messageData))
+	go handleNewReceiver(allTheReceivers, newReceiverChannel)
+
 	broadcast := make(chan messageData)
 	go mainConnection(broadcast)
+	go sendMainToChannels(allTheReceivers, broadcast)
 	return &Server{
-		appVersion:  appVersion,
-		mainChannel: broadcast,
+		appVersion:         appVersion,
+		mainChannel:        broadcast,
+		newReceiverChannel: newReceiverChannel,
+		allTheReceivers:    allTheReceivers,
+	}
+}
+
+func sendMainToChannels(channels chan []chan messageData, broadcast chan messageData) {
+	currentChannels := <-channels
+	for {
+		select {
+		case message := <-broadcast:
+			for i := 0; i < len(currentChannels); i++ {
+				currentChannels[i] <- message
+			}
+		case newChannels := <-channels:
+			currentChannels = newChannels
+		}
 	}
 }
 
@@ -47,6 +72,22 @@ const (
 	// WebSocket endpoint URL
 	mainEndPoint = "ws://localhost:5000/"
 )
+
+// handleNewReceiver listens on the oneReceiverChannel for new entries and then adds them to the list of receivers
+func handleNewReceiver(
+	allReceiversChannel chan []chan messageData,
+	oneReceiverChannel chan (chan messageData)) {
+	// send empty list of channels to the allReceiversChannel
+	currentReceivers := []chan messageData{}
+	allReceiversChannel <- currentReceivers
+	for {
+		// if we get a new receiver on the oneReceiverChannel, add it to the list of receivers
+		newReceiver := <-oneReceiverChannel
+		currentReceivers = append(currentReceivers, newReceiver)
+		// send the updated list of receivers to the allReceiversChannel
+		allReceiversChannel <- currentReceivers
+	}
+}
 
 func mainConnection(c chan messageData) {
 	// Connect to the WebSocket server
@@ -147,6 +188,8 @@ func (s *Server) subHandler(c echo.Context) error {
 	c.Response().WriteHeader(http.StatusOK)
 
 	port := c.Param("port")
+	newchan := make(chan messageData)
+	s.newReceiverChannel <- newchan
 	//
 	// subChannel := make(chan messageData)
 	// // connect to sub websocket server and
@@ -158,8 +201,13 @@ func (s *Server) subHandler(c echo.Context) error {
 		// case msg := <-subChannel:
 		// 	fmt.Fprintf(c.Response(), "data: %s %d\n\n", msg.Port, msg.Number)
 		// 	c.Response().Flush()
-		case msg := <-s.mainChannel:
-			fmt.Println("msg", msg, "port", port)
+		// case msg := <-s.mainChannel:
+		// 	fmt.Println("msg", msg, "port", port)
+		// 	fmt.Fprintf(c.Response(), "data: %s %d\n\n", msg.Port, msg.Number)
+		// 	c.Response().Flush()
+		// }
+		case msg := <-newchan:
+			// fmt.Println("msg", msg, "port", port)
 			fmt.Fprintf(c.Response(), "data: %s %d\n\n", msg.Port, msg.Number)
 			c.Response().Flush()
 		}
