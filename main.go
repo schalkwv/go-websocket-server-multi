@@ -83,19 +83,19 @@ type serverType struct {
 func main() {
 	servers := []serverType{
 		{"5000", 1000},
-		{"5001", 2000},
-		{"5002", 4000},
-		{"5003", 8000},
-		{"5004", 16000},
+		{"5001", 1100},
+		{"5002", 1200},
+		{"5003", 1300},
+		{"5004", 1400},
 	}
 	// ports := []string{"5555", "5556", "5557"}
 	inc := 0
 	for _, server := range servers {
-		inc++
+		// inc++
 		addConn := make(chan *connection)
 		removeConn := make(chan *connection)
 		conns := make(map[*connection]bool)
-		counter := 0
+		// counter := 0
 
 		// Connection pool to reuse connection objects
 		pool := &sync.Pool{
@@ -119,9 +119,10 @@ func main() {
 		}()
 
 		go func(port string, inc int, delay time.Duration) {
+			counter := 0
 			for {
 				time.Sleep(delay * time.Millisecond)
-				counter += inc
+				counter++
 				msg := messageData{
 					Port:   port,
 					Number: counter,
