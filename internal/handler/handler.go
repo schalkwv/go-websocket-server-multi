@@ -182,34 +182,45 @@ type account struct {
 
 type accountList map[string]account
 
+func sendResponse(c echo.Context, port string, mainValue, subValue int) {
+	fmt.Fprintf(c.Response(), "data: %s %d %d\n\n", port, mainValue, subValue)
+	c.Response().Flush()
+}
+
 func (s *Server) subHandler(c echo.Context) error {
 	c.Response().Header().Set(echo.HeaderContentType, "text/event-stream")
 	c.Response().Header().Set("Connection", "keep-alive")
 	c.Response().WriteHeader(http.StatusOK)
 
 	port := c.Param("port")
-	newchan := make(chan messageData)
-	s.newReceiverChannel <- newchan
+	mainChan := make(chan messageData)
+	s.newReceiverChannel <- mainChan
 	//
-	// subChannel := make(chan messageData)
-	// // connect to sub websocket server and
-	// // start listening for messages
-	// go subConnection(subChannel, port)
+	subChannel := make(chan messageData)
+	// connect to sub websocket server and
+	// start listening for messages
+	go subConnection(subChannel, port)
 	// listen for messages from the sub websocket server and the main websocket server
+	mainValue := 0
+	subValue := 0
 	for {
 		select {
-		// case msg := <-subChannel:
-		// 	fmt.Fprintf(c.Response(), "data: %s %d\n\n", msg.Port, msg.Number)
-		// 	c.Response().Flush()
+		case msg := <-subChannel:
+			subValue = msg.Number
+			sendResponse(c, port, mainValue, subValue)
+			// fmt.Fprintf(c.Response(), "data: %s %d\n\n", msg.Port, msg.Number)
+			// c.Response().Flush()
 		// case msg := <-s.mainChannel:
 		// 	fmt.Println("msg", msg, "port", port)
 		// 	fmt.Fprintf(c.Response(), "data: %s %d\n\n", msg.Port, msg.Number)
 		// 	c.Response().Flush()
 		// }
-		case msg := <-newchan:
+		case msg := <-mainChan:
 			// fmt.Println("msg", msg, "port", port)
-			fmt.Fprintf(c.Response(), "data: %s %d\n\n", msg.Port, msg.Number)
-			c.Response().Flush()
+			mainValue = msg.Number
+			// fmt.Fprintf(c.Response(), "data: %s %d\n\n", msg.Port, msg.Number)
+			// c.Response().Flush()
+			sendResponse(c, port, mainValue, subValue)
 		}
 	}
 }
